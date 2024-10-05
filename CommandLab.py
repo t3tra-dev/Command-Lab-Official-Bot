@@ -10,7 +10,7 @@ import discord
 import yaml
 from discord import app_commands
 from discord.abc import User
-from discord.ext import commands, tasks
+from discord.ext import commands
 
 from config.config import config
 from utils.setup import setup, setup_mcdata
