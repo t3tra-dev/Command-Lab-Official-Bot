@@ -13,14 +13,14 @@ from utils.util import create_codeblock, create_embed
 
 
 class CCommandInfoButtons(discord.ui.View):
-    def __init__(self, je: Optional[Embed] = None, be: Optional[Embed] = None):
+    def __init__(self, je: Optional[Embed] = None, be: Optional[Embed] = None, ee: Optional[Embed] = None):
         super().__init__(timeout=None)
-        if je is None:
-            self.je.disabled = True
-        if be is None:
-            self.be.disabled = True
+        self.je.disabled = je is None
+        self.be.disabled = be is None
+        self.ee.disabled = ee is None
         self.je_embed = je
         self.be_embed = be
+        self.ee_embed = ee
 
     @discord.ui.button(label="JE")
     async def je(self, interaction: discord.Interaction, item: discord.ui.Item):
@@ -29,6 +29,10 @@ class CCommandInfoButtons(discord.ui.View):
     @discord.ui.button(label="BE")
     async def be(self, interaction: discord.Interaction, item: discord.ui.Item):
         await interaction.response.edit_message(embed=self.be_embed)
+
+    @discord.ui.button(label="EE")
+    async def ee(self, interaction: discord.Interaction, item: discord.ui.Item):
+        await interaction.response.edit_message(embed=self.ee_embed)
 
 
 class CCommandInfo(commands.Cog):
@@ -46,59 +50,52 @@ class CCommandInfo(commands.Cog):
                 return
             d = CommandEntry.model_validate(data[command])
 
-        je_embed = None
-        be_embed = None
-        if d.ver.je is not None:
-            je_embed = Embed(
-                color=0xAA00BB,
-                title=f"/{command}",
-                description=d.desc,
-                timestamp=datetime.now(),
-            )
-            je_embed.set_author(name="Java Edition")
-            je_embed.add_field(
-                name="使用法",
-                value=create_codeblock(
-                    "/" + d.options.je if d.options.je != "-" else f"/{command}"
-                ),
-                inline=False,
-            )
-            je_embed.add_field(
-                name="例",
-                value=create_codeblock(
-                    d.exmp.je if d.exmp.je != "-" else f"/{command}"
-                ),
-                inline=False,
-            )
+        embeds = {
+            'je': None,
+            'be': None,
+            'ee': None
+        }
 
-        if d.ver.be is not None:
-            be_embed = Embed(
-                color=0xAA00BB,
-                title=f"/{command}",
-                description=d.desc,
-                timestamp=datetime.now(),
-            )
-            be_embed.set_author(name="Bedrock Edition")
-            be_embed.add_field(
-                name="使用法",
-                value=create_codeblock(
-                    "/" + d.options.be if d.options.be != "-" else f"/{command}"
-                ),
-                inline=False,
-            )
-            be_embed.add_field(
-                name="例",
-                value=create_codeblock(
-                    d.exmp.be if d.exmp.be != "-" else f"/{command}"
-                ),
-                inline=False,
-            )
+        def create_edition_embed(edition: str) -> Optional[Embed]:
+            if getattr(d.ver, edition) is not None:
+                embed = Embed(
+                    color=0xAA00BB,
+                    title=f"/{command}",
+                    description=d.desc,
+                    timestamp=datetime.now(),
+                )
+                embed.set_author(name={
+                    'je': 'Java Edition',
+                    'be': 'Bedrock Edition',
+                    'ee': 'Education Edition'
+                }[edition])
+
+                options = getattr(d.options, edition)
+                embed.add_field(
+                    name="使用法",
+                    value=create_codeblock("/" + options if options != "-" else f"/{command}"),
+                    inline=False,
+                )
+
+                example = getattr(d.exmp, edition)
+                embed.add_field(
+                    name="例",
+                    value=create_codeblock(example if example != "-" else f"/{command}"),
+                    inline=False,
+                )
+                return embed
+            return None
+
+        for edition in ['je', 'be', 'ee']:
+            embeds[edition] = create_edition_embed(edition)
 
         view = None
         if d.is_diff:
-            view = CCommandInfoButtons(je_embed, be_embed)
+            view = CCommandInfoButtons(embeds['je'], embeds['be'], embeds['ee'])
 
-        await interaction.response.send_message(embed=(je_embed or be_embed), view=view)
+        # 最初に表示するEmbed(優先順位: JE > BE > EE)
+        first_embed = embeds['je'] or embeds['be'] or embeds['ee']
+        await interaction.response.send_message(embed=first_embed, view=view)
 
     @ccommand.autocomplete("command")
     async def ccommand_autocomplete(
